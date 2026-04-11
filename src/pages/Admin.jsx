@@ -23,11 +23,17 @@ export default function Admin() {
   const [loadingPlayers, setLoadingPlayers] = useState(false)
   const [picksMessage, setPicksMessage] = useState('')
   const [activeTab, setActiveTab] = useState('participants')
+  const [completedGames, setCompletedGames] = useState([])
+  const [selectedCalcGame, setSelectedCalcGame] = useState(null)
+  const [calculating, setCalculating] = useState(false)
+  const [calcMessage, setCalcMessage] = useState('')
+  const [calcResults, setCalcResults] = useState([])
 
   useEffect(() => {
     if (authenticated) {
       fetchUsers()
       fetchGames()
+      fetchCompletedGames()
     }
   }, [authenticated])
 
@@ -43,6 +49,229 @@ export default function Admin() {
       setUpcomingGames(data.filter(g => g.status === 'upcoming'))
     }
   }
+
+  const fetchCompletedGames = async () => {
+  const { data } = await supabase
+    .from('games')
+    .select('*')
+    .eq('status', 'final')
+    .order('game_date', { ascending: false })
+  if (data) setCompletedGames(data)
+  }
+
+  const calculatePoints = async (game) => {
+  setCalculating(true)
+  setCalcMessage('Fetching game data from NHL API...')
+  setCalcResults([])
+
+  try {
+    // Fetch play-by-play and boxscore
+    const [pbpRes, boxRes] = await Promise.all([
+      fetch(`https://corsproxy.io/?https://api-web.nhle.com/v1/gamecenter/${game.nhl_game_id}/play-by-play`),
+      fetch(`https://corsproxy.io/?https://api-web.nhle.com/v1/gamecenter/${game.nhl_game_id}/boxscore`)
+    ])
+    const pbpData = await pbpRes.json()
+    const boxData = await boxRes.json()
+
+    // Get all goal plays in order
+    const plays = pbpData.plays || []
+    const goalPlays = plays.filter(p => p.typeDescKey === 'goal')
+
+    // Find first goal scorer for each team
+    const firstJetsGoal = goalPlays.find(p => p.details?.eventOwnerTeamId === pbpData.homeTeam?.id && pbpData.homeTeam?.abbrev === 'WPG' ||
+      p.details?.eventOwnerTeamId === pbpData.awayTeam?.id && pbpData.awayTeam?.abbrev === 'WPG')
+    const firstOppGoal = goalPlays.find(p => p.details?.eventOwnerTeamId !== (pbpData.homeTeam?.abbrev === 'WPG' ? pbpData.homeTeam?.id : pbpData.awayTeam?.id))
+
+    const jetsTeamId = pbpData.homeTeam?.abbrev === 'WPG' ? pbpData.homeTeam?.id : pbpData.awayTeam?.id
+    const oppTeamId = pbpData.homeTeam?.abbrev === 'WPG' ? pbpData.awayTeam?.id : pbpData.homeTeam?.id
+
+    const firstJetsGoalScorerId = goalPlays.find(p => p.details?.eventOwnerTeamId === jetsTeamId)?.details?.scoringPlayerId
+    const firstOppGoalScorerId = goalPlays.find(p => p.details?.eventOwnerTeamId === oppTeamId)?.details?.scoringPlayerId
+
+    // Build player stats map from play-by-play
+    const playerStatsMap = {}
+    for (const play of goalPlays) {
+      const d = play.details
+      if (!d) continue
+      const isJetsGoal = d.eventOwnerTeamId === jetsTeamId
+
+      // Goal scorer
+      if (d.scoringPlayerId) {
+        if (!playerStatsMap[d.scoringPlayerId]) playerStatsMap[d.scoringPlayerId] = { goals: 0, assists: 0 }
+        playerStatsMap[d.scoringPlayerId].goals++
+      }
+      // Assist 1
+      if (d.assist1PlayerId) {
+        if (!playerStatsMap[d.assist1PlayerId]) playerStatsMap[d.assist1PlayerId] = { goals: 0, assists: 0 }
+        playerStatsMap[d.assist1PlayerId].assists++
+      }
+      // Assist 2
+      if (d.assist2PlayerId) {
+        if (!playerStatsMap[d.assist2PlayerId]) playerStatsMap[d.assist2PlayerId] = { goals: 0, assists: 0 }
+        playerStatsMap[d.assist2PlayerId].assists++
+      }
+    }
+
+    // Get goalie stats from boxscore
+    const allPlayers = [
+      ...(boxData.playerByGameStats?.homeTeam?.forwards || []),
+      ...(boxData.playerByGameStats?.homeTeam?.defense || []),
+      ...(boxData.playerByGameStats?.homeTeam?.goalies || []),
+      ...(boxData.playerByGameStats?.awayTeam?.forwards || []),
+      ...(boxData.playerByGameStats?.awayTeam?.defense || []),
+      ...(boxData.playerByGameStats?.awayTeam?.goalies || []),
+    ]
+
+    // Find starting goalies
+    const homeGoalies = boxData.playerByGameStats?.homeTeam?.goalies || []
+    const awayGoalies = boxData.playerByGameStats?.awayTeam?.goalies || []
+    const jetsIsHome = pbpData.homeTeam?.abbrev === 'WPG'
+    const jetsGoalies = jetsIsHome ? homeGoalies : awayGoalies
+    const oppGoalies = jetsIsHome ? awayGoalies : homeGoalies
+
+    const jetsStartingGoalie = jetsGoalies.find(g => g.starter) || jetsGoalies[0]
+    const oppStartingGoalie = oppGoalies.find(g => g.starter) || oppGoalies[0]
+
+    const jetsGoalsAgainst = jetsStartingGoalie?.goalsAgainst ?? 0
+    const oppGoalsAgainst = oppStartingGoalie?.goalsAgainst ?? 0
+
+    const jetsShutout = jetsGoalsAgainst === 0
+    const oppShutout = oppGoalsAgainst === 0
+
+    // Calculate goalie points
+    const calcGoaliePoints = (goalsAgainst, shutout) => {
+      if (shutout) return 6
+      return Math.max(0, 3 - goalsAgainst)
+    }
+
+    const jetsGoaliePoints = calcGoaliePoints(jetsGoalsAgainst, jetsShutout)
+    const oppGoaliePoints = calcGoaliePoints(oppGoalsAgainst, oppShutout)
+
+    // Determine winner
+    const jetsScore = jetsIsHome ? boxData.homeTeam?.score : boxData.awayTeam?.score
+    const oppScore = jetsIsHome ? boxData.awayTeam?.score : boxData.homeTeam?.score
+    const winner = jetsScore > oppScore ? 'WPG' : game.opponent
+
+    // Update game with final score
+    await supabase.from('games').update({
+      status: 'final',
+      jets_score: jetsScore,
+      opponent_score: oppScore,
+      winning_team: winner
+    }).eq('id', game.id)
+
+    // Get all picks for this game
+    const { data: gamePicks } = await supabase
+      .from('picks')
+      .select('*, users(name)')
+      .eq('game_id', game.id)
+
+    if (!gamePicks || gamePicks.length === 0) {
+      setCalcMessage('No picks found for this game.')
+      setCalculating(false)
+      return
+    }
+
+    // Find wildcard pick
+    const wildcardPick = gamePicks.find(p => p.is_wildcard)
+    const nonWildcardPicks = gamePicks.filter(p => !p.is_wildcard)
+    const pickedPlayerIds = new Set(nonWildcardPicks.map(p => p.player_id).filter(Boolean))
+
+    // Find best unpicked Jets player for wildcard
+    let wildcardPlayerId = null
+    let wildcardPlayerPoints = 0
+
+    // Get all Jets players from DB
+    const { data: jetsPlayers } = await supabase
+      .from('players')
+      .select('*')
+      .eq('team', 'WPG')
+      .eq('is_goalie', false)
+
+    for (const player of (jetsPlayers || [])) {
+      if (pickedPlayerIds.has(player.id)) continue
+      const nhlId = parseInt(player.nhl_player_id)
+      const stats = playerStatsMap[nhlId]
+      if (!stats) continue
+
+      let pts = stats.goals + stats.assists
+      if (nhlId === firstJetsGoalScorerId) pts += 4 // 5 instead of 1
+
+      if (pts > wildcardPlayerPoints) {
+        wildcardPlayerPoints = pts
+        wildcardPlayerId = player.id
+      }
+    }
+
+    // Calculate points for each pick
+    const results = []
+    for (const pick of gamePicks) {
+      let points = 0
+      let breakdown = []
+
+      // Team prediction points
+      if (pick.predicted_winner === winner) {
+        points += 2
+        breakdown.push('Correct winner: +2')
+      }
+
+      if (pick.is_wildcard) {
+        points += wildcardPlayerPoints
+        if (wildcardPlayerPoints > 0) breakdown.push(`Wildcard player: +${wildcardPlayerPoints}`)
+      } else if (pick.player_id) {
+        // Check if this is a goalie pick
+        const { data: playerData } = await supabase
+          .from('players')
+          .select('*')
+          .eq('id', pick.player_id)
+          .single()
+
+        if (playerData?.is_goalie) {
+          const isJets = playerData.team === 'WPG'
+          const goaliePoints = isJets ? jetsGoaliePoints : oppGoaliePoints
+          points += goaliePoints
+          breakdown.push(`Goalie: +${goaliePoints}`)
+        } else {
+          const nhlId = parseInt(playerData?.nhl_player_id)
+          const stats = playerStatsMap[nhlId]
+          if (stats) {
+            let playerPoints = stats.goals + stats.assists
+            if (nhlId === firstJetsGoalScorerId) playerPoints += 4
+            if (nhlId === firstOppGoalScorerId) playerPoints += 4
+            points += playerPoints
+            if (stats.goals > 0) breakdown.push(`Goals: +${stats.goals}`)
+            if (stats.assists > 0) breakdown.push(`Assists: +${stats.assists}`)
+            if (nhlId === firstJetsGoalScorerId || nhlId === firstOppGoalScorerId) breakdown.push('First goal bonus: +4')
+          }
+        }
+      }
+
+      // Update pick in DB
+      await supabase.from('picks').update({ points_earned: points }).eq('id', pick.id)
+
+      // Update season standings
+      await supabase.from('season_participants')
+        .update({ total_points: supabase.rpc('increment', { x: points }) })
+
+      results.push({
+        name: pick.users?.name,
+        points,
+        breakdown: breakdown.join(', ') || 'No points',
+        isWildcard: pick.is_wildcard
+      })
+    }
+
+    results.sort((a, b) => b.points - a.points)
+    setCalcResults(results)
+    setCalcMessage('Points calculated successfully!')
+    fetchCompletedGames()
+    fetchGames()
+
+  } catch (err) {
+    setCalcMessage('Error: ' + err.message)
+  }
+  setCalculating(false)
+}
 
   const addUser = async () => {
     if (!newName || !newEmail) return setMessage('Please enter both name and email')
@@ -371,6 +600,7 @@ for (const user of pickingOrder) {
         <button style={tabStyle('participants')} onClick={() => setActiveTab('participants')}>Participants</button>
         <button style={tabStyle('schedule')} onClick={() => setActiveTab('schedule')}>Schedule</button>
         <button style={tabStyle('picks')} onClick={() => setActiveTab('picks')}>Enter Picks</button>
+        <button style={tabStyle('calculate')} onClick={() => setActiveTab('calculate')}>Calculate Points</button>
       </div>
 
       <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '0 4px 4px 4px' }}>
@@ -438,6 +668,80 @@ for (const user of pickingOrder) {
             </table>
           </div>
         )}
+
+{/* CALCULATE POINTS TAB */}
+{activeTab === 'calculate' && (
+  <div>
+    <h2>Calculate Points</h2>
+    <p style={{ color: '#666' }}>Select a completed game to calculate points. Make sure the game has finished before calculating.</p>
+    
+    <div style={{ marginBottom: '20px' }}>
+      <label><strong>Select Completed Game:</strong></label>
+      <select
+        onChange={(e) => {
+          const game = [...completedGames, ...upcomingGames].find(g => g.id === e.target.value)
+          if (game) setSelectedCalcGame(game)
+        }}
+        style={{ marginLeft: '10px', padding: '8px' }}
+      >
+        <option value="">-- Select a game --</option>
+        {upcomingGames.map(game => (
+          <option key={game.id} value={game.id}>
+            {game.game_date} vs {game.opponent} ({game.is_home ? 'Home' : 'Away'}) - UPCOMING
+          </option>
+        ))}
+        {completedGames.map(game => (
+          <option key={game.id} value={game.id}>
+            {game.game_date} vs {game.opponent} ({game.is_home ? 'Home' : 'Away'}) - FINAL
+          </option>
+        ))}
+      </select>
+    </div>
+
+    {selectedCalcGame && (
+      <div>
+        <button
+          onClick={() => calculatePoints(selectedCalcGame)}
+          disabled={calculating}
+          style={{ padding: '10px 24px', backgroundColor: '#c8102e', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}
+        >
+          {calculating ? 'Calculating...' : `Calculate Points for ${selectedCalcGame.game_date} vs ${selectedCalcGame.opponent}`}
+        </button>
+      </div>
+    )}
+
+    {calcMessage && (
+      <p style={{ marginTop: '15px', color: calcMessage.includes('Error') ? 'red' : 'green', fontWeight: 'bold' }}>
+        {calcMessage}
+      </p>
+    )}
+
+    {calcResults.length > 0 && (
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px' }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '8px' }}>Rank</th>
+            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '8px' }}>Participant</th>
+            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '8px' }}>Points</th>
+            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '8px' }}>Breakdown</th>
+          </tr>
+        </thead>
+        <tbody>
+          {calcResults.map((result, index) => (
+            <tr key={index} style={{ backgroundColor: index === 0 ? '#fff8e1' : 'white' }}>
+              <td style={{ padding: '8px', borderBottom: '1px solid #eee' }}>{index + 1}</td>
+              <td style={{ padding: '8px', borderBottom: '1px solid #eee' }}>
+                {result.name} {result.isWildcard ? '🃏' : ''}
+              </td>
+              <td style={{ padding: '8px', borderBottom: '1px solid #eee', fontWeight: 'bold' }}>{result.points}</td>
+              <td style={{ padding: '8px', borderBottom: '1px solid #eee', fontSize: '13px', color: '#555' }}>{result.breakdown}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )}
+  </div>
+)}
 
         {/* PICKS TAB */}
         {activeTab === 'picks' && (
