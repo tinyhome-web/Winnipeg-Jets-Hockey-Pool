@@ -400,11 +400,26 @@ export default function Admin() {
     const existingPicksMap = {}
     const existingWinnersMap = {}
     for (const pick of existingPicks) {
-    existingPicksMap[pick.user_id] = pick.player_id || ''
-    existingWinnersMap[pick.user_id] = pick.predicted_winner || ''
+      if (pick.player_id) {
+        // Check if this player is a goalie and map back to goalie- format
+        const { data: playerData } = await supabase
+          .from('players')
+          .select('is_goalie, team')
+          .eq('id', pick.player_id)
+          .limit(1)
+    
+      if (playerData?.[0]?.is_goalie) {
+        existingPicksMap[pick.user_id] = `goalie-${playerData[0].team}`
+      } else {
+        existingPicksMap[pick.user_id] = pick.player_id
+      }
+    } else {
+      existingPicksMap[pick.user_id] = ''
     }
-    setPicks(existingPicksMap)
-    setPredictedWinners(existingWinnersMap)
+    existingWinnersMap[pick.user_id] = pick.predicted_winner || ''
+  }
+  setPicks(existingPicksMap)
+  setPredictedWinners(existingWinnersMap)
     }
 
     // Check if picking order already exists
@@ -482,12 +497,14 @@ if (previousGame) {
   if (!playerId) continue
 
   // Check if THIS specific user picked this same player last game
-  const { data: previousUserPick } = await supabase
-    .from('picks')
-    .select('player_id')
-    .eq('game_id', previousGame.id)
-    .eq('user_id', user.id)
-    .single()
+  const { data: previousUserPickData } = await supabase
+  .from('picks')
+  .select('player_id')
+  .eq('game_id', previousGame.id)
+  .eq('user_id', user.id)
+  .limit(1)
+
+  const previousUserPick = previousUserPickData?.[0]
 
   if (previousUserPick && previousUserPick.player_id === playerId) {
     const playerName = players.find(p => p.id === playerId)?.name || 'A player'
@@ -537,6 +554,7 @@ for (const user of pickingOrder) {
             .eq('is_goalie', true)
             .limit(1)
           if (goalieData && goalieData.length > 0) playerDbId = goalieData[0].id
+          console.log('Goalie lookup:', team, goalieData)
         } else {
           playerDbId = playerId
         }
@@ -701,7 +719,12 @@ for (const user of pickingOrder) {
     {selectedCalcGame && (
       <div>
         <button
-          onClick={() => calculatePoints(selectedCalcGame)}
+          onClick={() => {
+          if (selectedCalcGame.status === 'upcoming') {
+          if (!window.confirm('This game is marked as UPCOMING and may not have been played yet. Are you sure you want to calculate points?')) return
+          }
+          calculatePoints(selectedCalcGame)
+          }}
           disabled={calculating}
           style={{ padding: '10px 24px', backgroundColor: '#c8102e', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}
         >
