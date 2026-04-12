@@ -73,6 +73,14 @@ export default function Admin() {
     const pbpData = await pbpRes.json()
     const boxData = await boxRes.json()
 
+    // Check if game is actually final
+    const gameState = pbpData.gameState
+      if (gameState !== 'OFF' && gameState !== 'FINAL') {
+        setCalcMessage(`Game is not finished yet. Current state: ${gameState}. Please wait until the game is over.`)
+        setCalculating(false)
+        return
+    }
+
     // Get all goal plays in order
     const plays = pbpData.plays || []
     const goalPlays = plays.filter(p => p.typeDescKey === 'goal')
@@ -724,12 +732,7 @@ for (const user of pickingOrder) {
     {selectedCalcGame && (
       <div>
         <button
-          onClick={() => {
-          if (selectedCalcGame.status === 'upcoming') {
-          if (!window.confirm('This game is marked as UPCOMING and may not have been played yet. Are you sure you want to calculate points?')) return
-          }
-          calculatePoints(selectedCalcGame)
-          }}
+          onClick={() => calculatePoints(selectedCalcGame)}
           disabled={calculating}
           style={{ padding: '10px 24px', backgroundColor: '#c8102e', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}
         >
