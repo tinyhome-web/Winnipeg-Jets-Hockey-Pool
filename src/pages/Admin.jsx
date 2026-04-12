@@ -261,8 +261,16 @@ export default function Admin() {
       await supabase.from('picks').update({ points_earned: points }).eq('id', pick.id)
 
       // Update season standings
-      await supabase.from('season_participants')
-        .update({ total_points: supabase.rpc('increment', { x: points }) })
+      const { data: currentStanding } = await supabase
+      .from('season_participants')
+      .select('total_points')
+      .eq('user_id', pick.user_id)
+      .single()
+
+const currentPoints = currentStanding?.total_points || 0
+await supabase.from('season_participants')
+  .update({ total_points: currentPoints + points })
+  .eq('user_id', pick.user_id)
 
       results.push({
         name: pick.users?.name,
