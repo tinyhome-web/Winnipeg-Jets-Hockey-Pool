@@ -215,16 +215,19 @@ export default function Admin() {
         breakdown.push('Correct winner: +2')
       }
 
+      let playerData = null
+
       if (pick.is_wildcard) {
         points += wildcardPlayerPoints
         if (wildcardPlayerPoints > 0) breakdown.push(`Wildcard player: +${wildcardPlayerPoints}`)
       } else if (pick.player_id) {
-        // Check if this is a goalie pick
-        const { data: playerData } = await supabase
-          .from('players')
-          .select('*')
-          .eq('id', pick.player_id)
-          .single()
+          // Check if this is a goalie pick
+          const { data: fetchedPlayerData } = await supabase
+            .from('players')
+            .select('*')
+            .eq('id', pick.player_id)
+            .single()
+        playerData = fetchedPlayerData
 
         if (playerData?.is_goalie) {
           const isJets = playerData.team === 'WPG'
@@ -257,7 +260,9 @@ export default function Admin() {
         name: pick.users?.name,
         points,
         breakdown: breakdown.join(', ') || 'No points',
-        isWildcard: pick.is_wildcard
+        isWildcard: pick.is_wildcard,
+        playerName: pick.is_wildcard ? 'Wildcard' : (playerData?.is_goalie ? `${playerData.team} Goalies` : playerData?.name || '—'),
+        predictedWinner: pick.predicted_winner
       })
     }
 
@@ -745,21 +750,25 @@ for (const user of pickingOrder) {
           <tr>
             <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '8px' }}>Rank</th>
             <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '8px' }}>Participant</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '8px' }}>Points</th>
+            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '8px' }}>Pick</th>
+            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '8px' }}>Predicted Winner</th>
+            <th style={{ textAlign: 'right', borderBottom: '1px solid #ccc', padding: '8px' }}>Points</th>
             <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '8px' }}>Breakdown</th>
           </tr>
-        </thead>
+</thead>
         <tbody>
           {calcResults.map((result, index) => (
             <tr key={index} style={{ backgroundColor: index === 0 ? '#fff8e1' : 'white' }}>
               <td style={{ padding: '8px', borderBottom: '1px solid #eee' }}>{index + 1}</td>
               <td style={{ padding: '8px', borderBottom: '1px solid #eee' }}>
                 {result.name} {result.isWildcard ? '🃏' : ''}
-              </td>
-              <td style={{ padding: '8px', borderBottom: '1px solid #eee', fontWeight: 'bold' }}>{result.points}</td>
-              <td style={{ padding: '8px', borderBottom: '1px solid #eee', fontSize: '13px', color: '#555' }}>{result.breakdown}</td>
-            </tr>
-          ))}
+            </td>
+            <td style={{ padding: '8px', borderBottom: '1px solid #eee' }}>{result.playerName || 'Wildcard'}</td>
+            <td style={{ padding: '8px', borderBottom: '1px solid #eee' }}>{result.predictedWinner}</td>
+            <td style={{ padding: '8px', borderBottom: '1px solid #eee', textAlign: 'right', fontWeight: 'bold' }}>{result.points}</td>
+            <td style={{ padding: '8px', borderBottom: '1px solid #eee', fontSize: '13px', color: '#555' }}>{result.breakdown}</td>
+          </tr>
+        ))}
         </tbody>
       </table>
     )}
