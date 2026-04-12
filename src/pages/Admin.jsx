@@ -395,6 +395,73 @@ export default function Admin() {
     setLoadingPlayers(false)
   }
 
+const generatePickingOrder = async () => {
+  if (!selectedGame) return
+
+  // Find the previous game
+  const { data: previousGame } = await supabase
+    .from('games')
+    .select('id, game_date')
+    .lt('game_date', selectedGame.game_date)
+    .eq('status', 'final')
+    .order('game_date', { ascending: false })
+    .limit(1)
+    .single()
+    
+  console.log('Previous game found:', previousGame)
+  if (!previousGame) {
+    // No previous game found, randomize
+    const shuffled = [...users].sort(() => Math.random() - 0.5)
+    setPickingOrder(shuffled.map((u, i) => ({ ...u, position: i + 1 })))
+    setPicksMessage('No previous game found — order randomized.')
+    return
+  }
+
+  // Check weekend rule — if previous game was Friday and this game is Saturday/Sunday
+  const prevDate = new Date(new Date(previousGame.game_date + 'T12:00:00').toLocaleString('en-US', { timeZone: 'America/Winnipeg' }))
+  const currDate = new Date(new Date(selectedGame.game_date + 'T12:00:00').toLocaleString('en-US', { timeZone: 'America/Winnipeg' }))
+  const prevDay = prevDate.getDay()
+  const currDay = currDate.getDay()
+
+  const isFriday = prevDay === 5
+  const isWeekend = currDay === 0 || currDay === 6
+
+  console.log('prevDay:', prevDay, 'currDay:', currDay, 'isFriday:', isFriday, 'isWeekend:', isWeekend)
+  if (isFriday && isWeekend) {
+    const shuffled = [...users].sort(() => Math.random() - 0.5)
+    setPickingOrder(shuffled.map((u, i) => ({ ...u, position: i + 1 })))
+    setPicksMessage('Weekend game after Friday game — order randomized.')
+    return
+  }
+
+  // Get previous game picks with points
+  const { data: previousPicks } = await supabase
+    .from('picks')
+    .select('user_id, points_earned, users(name)')
+    .eq('game_id', previousGame.id)
+    console.log('Previous picks:', previousPicks)
+
+  if (!previousPicks || previousPicks.length === 0) {
+    const shuffled = [...users].sort(() => Math.random() - 0.5)
+    setPickingOrder(shuffled.map((u, i) => ({ ...u, position: i + 1 })))
+    setPicksMessage('No points found for previous game — order randomized.')
+    return
+  }
+
+  // Sort by points descending, randomize ties
+  const sorted = [...previousPicks].sort((a, b) => {
+    if (b.points_earned !== a.points_earned) return b.points_earned - a.points_earned
+    return Math.random() - 0.5
+  })
+
+  setPickingOrder(sorted.map((p, i) => ({
+    id: p.user_id,
+    name: p.users?.name,
+    position: i + 1
+  })))
+  setPicksMessage('Picking order generated from last game results!')
+}
+
   const selectGame = async (game) => {
     setSelectedGame(game)
     setPicksMessage('')
@@ -804,11 +871,13 @@ for (const user of pickingOrder) {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3>Picking Order</h3>
-                  <button onClick={savePickingOrder} style={{ padding: '6px 14px', backgroundColor: '#003087', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                    Save Order
+                  <div>
+                    <button onClick={generatePickingOrder} style={{ padding: '6px 14px', backgroundColor: '#1a7a1a', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '8px' }}>
+                    Generate Order from Last Game
                   </button>
                 </div>
-                <p style={{ color: '#666', fontSize: '14px' }}>Drag to reorder if needed, then click Save Order before entering picks.</p>
+              </div>
+              <p style={{ color: '#666', fontSize: '14px' }}>Click "Generate Order" to auto-set based on last game results, or adjust manually then save.</p>
 
                 {loadingPlayers ? (
                   <p>Loading roster...</p>
