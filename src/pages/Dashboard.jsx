@@ -11,6 +11,13 @@ export default function Dashboard() {
 
   useEffect(() => { fetchDashboardData() }, [])
 
+  useEffect(() => {
+  document.body.style.overflow = 'hidden'
+  return () => {
+    document.body.style.overflow = 'auto'
+  }
+}, [])
+
   const fetchDashboardData = async () => {
     setLoading(true)
     const { data: participantsData } = await supabase
