@@ -454,6 +454,7 @@ export default function Admin() {
   return (
     <div style={a.page}>
       <div style={a.bgPattern} />
+<div style={{ position: 'fixed', inset: 0, zIndex: 0, backgroundImage: 'radial-gradient(ellipse at 50% 50%, rgba(1,24,63,0.72) 0%, rgba(1,24,63,0.85) 100%)', pointerEvents: 'none' }} />
       <header style={a.header}>
         <h1 style={a.headerTitle}>⚙️ ADMIN PANEL</h1>
         <a href="/" style={a.backLink}>← Public Dashboard</a>
@@ -498,7 +499,7 @@ export default function Admin() {
                 <div style={a.scheduleOpp}>vs {g.opponent}</div>
                 <div style={a.scheduleHome}>{g.is_home ? 'H' : 'A'}</div>
                 <div style={{ ...a.scheduleStatus, color: g.status === 'final' ? '#545559' : '#7db8f7' }}>
-                  {g.status === 'final' ? `${g.jets_score}-${g.opponent_score}` : 'upcoming'}
+                  {g.jets_score !== null && g.opponent_score !== null ? `${g.jets_score}-${g.opponent_score}` : <span style={{ color: '#fff' }}>—</span>}
                 </div>
               </div>
             ))}
@@ -636,24 +637,32 @@ const a = {
     minHeight: '100vh', backgroundColor: '#01183F', color: '#fff',
     fontFamily: "'Barlow Condensed', 'Arial Narrow', sans-serif",
     display: 'flex', flexDirection: 'column', position: 'relative',
+    overflowX: 'hidden',
   },
   bgPattern: {
     position: 'fixed', inset: 0, zIndex: 0,
-    backgroundImage: 'radial-gradient(ellipse at 100% 0%, rgba(70,130,210,0.12) 0%, transparent 55%), radial-gradient(ellipse at 0% 100%, rgba(1,24,63,0.9) 0%, transparent 60%)',
+    backgroundImage: `
+      radial-gradient(ellipse at 20% 30%, rgba(255,255,255,0.15) 0%, transparent 40%),
+      radial-gradient(ellipse at 80% 70%, rgba(255,255,255,0.1) 0%, transparent 35%),
+      repeating-linear-gradient(-30deg, transparent, transparent 80px, rgba(255,255,255,0.04) 80px, rgba(255,255,255,0.04) 81px),
+      repeating-linear-gradient(40deg, transparent, transparent 60px, rgba(255,255,255,0.03) 60px, rgba(255,255,255,0.03) 61px),
+      linear-gradient(180deg, #a8c8e8 0%, #c5ddf0 30%, #b8d4ec 60%, #9bbde0 100%)
+    `,
     pointerEvents: 'none',
   },
   header: {
     backgroundColor: 'rgba(1,24,63,0.95)', backdropFilter: 'blur(10px)',
     borderBottom: '2px solid rgba(70,130,210,0.3)', padding: '12px 24px',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    position: 'relative', zIndex: 2, flexShrink: 0,
+    position: 'relative', zIndex: 2, flexShrink: 0, width: '100%',
   },
   headerTitle: { margin: 0, fontSize: '22px', fontWeight: 900, letterSpacing: '4px', color: '#fff' },
-  backLink: { position: 'absolute', left: '24px', color: '#545559', textDecoration: 'none', fontSize: '13px' },
+  backLink: { position: 'absolute', left: '24px', color: '#7db8f7', textDecoration: 'none', fontSize: '13px', fontWeight: 700, letterSpacing: '1px' },
   main: {
-    display: 'grid', gridTemplateColumns: '220px 200px 1fr 260px',
+    display: 'grid', gridTemplateColumns: '16% 18% 1fr 24%',
     gap: '0', flex: 1, position: 'relative', zIndex: 1, overflow: 'hidden',
     height: 'calc(100vh - 52px)',
+    width: '100%',
   },
   col: {
     padding: '16px', overflowY: 'auto',
@@ -710,10 +719,10 @@ const a = {
     display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 6px',
     backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '4px', fontSize: '12px',
   },
-  scheduleDate: { color: '#8F9191', width: '80px', flexShrink: 0 },
-  scheduleOpp: { flex: 1, fontWeight: 600 },
-  scheduleHome: { color: '#545559', width: '14px', fontSize: '11px' },
-  scheduleStatus: { width: '60px', textAlign: 'right', fontSize: '11px' },
+  scheduleDate: { color: '#fff', width: '90px', flexShrink: 0, fontSize: '13px', fontWeight: 700 },
+  scheduleOpp: { flex: 1, fontWeight: 700, fontSize: '14px', color: '#fff' },
+  scheduleHome: { color: '#fff', width: '20px', fontSize: '12px', fontWeight: 700 },
+  scheduleStatus: { width: '60px', textAlign: 'right', fontSize: '12px', fontWeight: 700, color: '#fff' },
   pickGameSelect: { display: 'flex', gap: '8px', marginBottom: '10px', alignItems: 'center' },
   picksTable: { display: 'flex', flexDirection: 'column', gap: '2px' },
   picksHeader: {
