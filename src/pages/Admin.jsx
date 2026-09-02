@@ -294,8 +294,8 @@ export default function Admin() {
     setCalcResults([])
     try {
       const [pbpRes, boxRes] = await Promise.all([
-        fetch(`https://corsproxy.io/?https://api-web.nhle.com/v1/gamecenter/${game.nhl_game_id}/play-by-play`),
-        fetch(`https://corsproxy.io/?https://api-web.nhle.com/v1/gamecenter/${game.nhl_game_id}/boxscore`)
+        fetch(`/api/playbyplay?gameId=${game.nhl_game_id}`),
+        fetch(`/api/boxscore?gameId=${game.nhl_game_id}`)
       ])
       const pbpData = await pbpRes.json()
       const boxData = await boxRes.json()
