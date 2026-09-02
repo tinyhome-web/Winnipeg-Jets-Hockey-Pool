@@ -685,8 +685,8 @@ const a = {
     color: '#fff', fontSize: '13px', width: '100%', boxSizing: 'border-box',
   },
   pickSelect: {
-    padding: '4px 6px', backgroundColor: '#0a1f4e',
-    border: '1px solid rgba(255,255,255,0.15)', borderRadius: '4px',
+    padding: '4px 6px', backgroundColor: 'rgba(255,255,255,0.07)',
+    border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px',
     color: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box',
   },
   btnPrimary: {
