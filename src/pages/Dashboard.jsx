@@ -65,7 +65,7 @@ export default function Dashboard() {
       {/* Header */}
       <header style={s.header}>
         <h1 style={s.headerTitle}>JETS HOCKEY POOL</h1>
-        <p style={s.headerSub}>2025–2026 SEASON</p>
+        <p style={s.headerSub}>2026–2027 SEASON</p>
         <a href="/admin" style={s.adminLink}>⚙ Admin</a>
       </header>
 

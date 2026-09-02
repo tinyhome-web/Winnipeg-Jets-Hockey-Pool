@@ -76,7 +76,7 @@ export default function Admin() {
     setImporting(true)
     setImportMessage('Importing...')
     try {
-      const res = await fetch('https://corsproxy.io/?https://api-web.nhle.com/v1/club-schedule-season/WPG/20252026')
+      const res = await fetch('/api/schedule')
       const data = await res.json()
       const games = (data.games || []).filter(game => game.gameType === 2)
       let added = 0, skipped = 0
