@@ -106,8 +106,8 @@ export default function Admin() {
     setPlayers([])
     try {
       const [jetsRes, oppRes] = await Promise.all([
-        fetch(`https://api.allorigins.win/raw?url=https://api-web.nhle.com/v1/roster/WPG/20252026`),
-        fetch(`https://api.allorigins.win/raw?url=https://api-web.nhle.com/v1/roster/${game.opponent}/20252026`)
+        fetch(`/api/roster?team=WPG`),
+        fetch(`/api/roster?team=${game.opponent}`)
       ])
       const jetsData = await jetsRes.json()
       const oppData = await oppRes.json()
@@ -680,13 +680,13 @@ const a = {
     color: '#fff', fontSize: '13px', width: '100%', boxSizing: 'border-box',
   },
   select: {
-    padding: '7px 10px', backgroundColor: 'rgba(255,255,255,0.07)',
-    border: '1px solid rgba(255,255,255,0.12)', borderRadius: '5px',
+    padding: '7px 10px', backgroundColor: '#0a1f4e',
+    border: '1px solid rgba(255,255,255,0.2)', borderRadius: '5px',
     color: '#fff', fontSize: '13px', width: '100%', boxSizing: 'border-box',
   },
   pickSelect: {
-    padding: '4px 6px', backgroundColor: 'rgba(255,255,255,0.07)',
-    border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px',
+    padding: '4px 6px', backgroundColor: '#0a1f4e',
+    border: '1px solid rgba(255,255,255,0.15)', borderRadius: '4px',
     color: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box',
   },
   btnPrimary: {
