@@ -9,6 +9,10 @@ export default function Dashboard() {
   const [upcomingPicks, setUpcomingPicks] = useState([])
   const [loading, setLoading] = useState(true)
 
+  const [selectedPlayer, setSelectedPlayer] = useState(null)
+  const [playerHistory, setPlayerHistory] = useState([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+
   useEffect(() => { fetchDashboardData() }, [])
 
   useEffect(() => {
@@ -44,6 +48,21 @@ export default function Dashboard() {
     }
     setLoading(false)
   }
+
+  const fetchPlayerHistory = async (user) => {
+    setSelectedPlayer(user)
+    setLoadingHistory(true)
+    setPlayerHistory([])
+
+      const { data: picks } = await supabase
+      .from('picks')
+      .select('*, games(game_date, opponent, is_home, jets_score, opponent_score, winning_team, status), players(name, team, is_goalie)')
+      .eq('user_id', user.users.id)
+      .order('created_at', { ascending: false })
+
+      if (picks) setPlayerHistory(picks)
+      setLoadingHistory(false)
+    }
 
   if (loading) return (
     <div style={s.loadingScreen}>
@@ -131,7 +150,10 @@ export default function Dashboard() {
                   <div style={s.standingRank}>
                     {i < 3 ? <span style={{ fontSize: '18px' }}>{medals[i]}</span> : <span style={s.rankNum}>{i + 1}</span>}
                   </div>
-                  <div style={s.standingName}>{st.users?.name}</div>
+                  <div style={{ ...s.standingName, cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.2)' }}
+                    onClick={() => fetchPlayerHistory(st)}>
+                    {st.users?.name}
+                  </div>
                   <div style={s.barWrap}>
                     <div style={{ ...s.bar, width: `${pct}%` }} />
                   </div>
@@ -197,6 +219,140 @@ export default function Dashboard() {
           )}
         </aside>
       </main>
+      {/* Player History Modal */}
+{selectedPlayer && (
+  <div style={s.modalOverlay} onClick={() => setSelectedPlayer(null)}>
+    <div style={s.modal} onClick={e => e.stopPropagation()}>
+      <div style={s.modalHeader}>
+        <div>
+          <h2 style={s.modalName}>{selectedPlayer.users?.name}</h2>
+          <p style={s.modalSub}>2026–2027 Season History</p>
+        </div>
+        <div style={s.modalStats}>
+          <div style={s.modalStat}>
+            <div style={s.modalStatNum}>{selectedPlayer.total_points}</div>
+            <div style={s.modalStatLabel}>TOTAL PTS</div>
+          </div>
+          <div style={s.modalStat}>
+            <div style={s.modalStatNum}>
+              {playerHistory.filter(p => p.games?.status === 'final').length}
+            </div>
+            <div style={s.modalStatLabel}>GAMES</div>
+          </div>
+          <div style={s.modalStat}>
+            <div style={s.modalStatNum}>
+              {playerHistory.filter(p => p.games?.status === 'final').length > 0
+                ? (selectedPlayer.total_points / playerHistory.filter(p => p.games?.status === 'final').length).toFixed(1)
+                : '0.0'}
+            </div>
+            <div style={s.modalStatLabel}>AVG/GAME</div>
+          </div>
+          <div style={s.modalStat}>
+            <div style={s.modalStatNum}>
+              {playerHistory.length > 0 ? Math.max(...playerHistory.map(p => p.points_earned || 0)) : 0}
+            </div>
+            <div style={s.modalStatLabel}>BEST GAME</div>
+          </div>
+        </div>
+        <button onClick={() => setSelectedPlayer(null)} style={s.modalClose}>✕</button>
+      </div>
+
+      <div style={s.modalBody}>
+        {loadingHistory ? (
+          <div style={s.modalLoading}>Loading history...</div>
+        ) : playerHistory.length === 0 ? (
+          <div style={s.modalLoading}>No games played yet.</div>
+        ) : (
+          <table style={s.modalTable}>
+            <thead>
+              <tr>
+                <th style={s.modalTh}>DATE</th>
+                <th style={s.modalTh}>OPPONENT</th>
+                <th style={s.modalTh}>PICK</th>
+                <th style={s.modalTh}>PREDICTED</th>
+                <th style={s.modalTh}>RESULT</th>
+                <th style={s.modalTh}>BREAKDOWN</th>
+                <th style={{ ...s.modalTh, textAlign: 'right' }}>PTS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {playerHistory.map((pick, i) => {
+                const game = pick.games
+                const isWildcard = pick.is_wildcard
+                const isFinal = game?.status === 'final'
+                const correctWinner = pick.predicted_winner === game?.winning_team
+                const isGoalie = pick.players?.is_goalie
+
+                return (
+                  <tr key={pick.id} style={{
+                    backgroundColor: isWildcard
+                      ? 'rgba(173,14,40,0.08)'
+                      : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)'
+                  }}>
+                    <td style={s.modalTd}>{game?.game_date}</td>
+                    <td style={s.modalTd}>
+                      <span style={{ fontWeight: 700 }}>{game?.is_home ? 'vs' : '@'} {game?.opponent}</span>
+                      {isFinal && (
+                        <div style={{ fontSize: '11px', color: '#8F9191' }}>
+                          WPG {game.jets_score} – {game.opponent_score} {game.opponent}
+                        </div>
+                      )}
+                    </td>
+                    <td style={s.modalTd}>
+                      {isWildcard ? (
+                        <span style={s.wildcardTag}>🃏 Wildcard</span>
+                      ) : (
+                        <span>
+                          {pick.players?.name || '—'}
+                          {isGoalie && <span style={s.goalieTag}>G</span>}
+                        </span>
+                      )}
+                    </td>
+                    <td style={s.modalTd}>
+                      <span style={{
+                        color: isFinal
+                          ? correctWinner ? '#4caf50' : '#AD0E28'
+                          : '#8F9191'
+                      }}>
+                        {pick.predicted_winner}
+                        {isFinal && (correctWinner ? ' ✓' : ' ✗')}
+                      </span>
+                    </td>
+                    <td style={s.modalTd}>
+                      {isFinal ? (
+                        <span style={{ color: game.winning_team === 'WPG' ? '#4caf50' : '#AD0E28', fontWeight: 700, fontSize: '12px' }}>
+                          {game.winning_team} WIN
+                        </span>
+                      ) : (
+                        <span style={{ color: '#545559', fontSize: '12px' }}>Upcoming</span>
+                      )}
+                    </td>
+                    <td style={{ ...s.modalTd, fontSize: '11px', color: '#8F9191', maxWidth: '180px' }}>
+                      {isFinal ? (pick.points_earned > 0 ? '✓ ' : '') : '—'}
+                    </td>
+                    <td style={{ ...s.modalTd, textAlign: 'right' }}>
+                      {isFinal ? (
+                        <span style={{
+                          ...s.ptsBubble,
+                          background: pick.points_earned >= 5 ? '#1a6b3a' : pick.points_earned > 0 ? '#2a6ab5' : '#2a3550',
+                          fontSize: '13px', padding: '3px 9px'
+                        }}>
+                          {pick.points_earned}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#545559' }}>—</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  </div>
+)}
     </div>
   )
 }
@@ -340,4 +496,67 @@ const s = {
   nextVs: { fontSize: '12px', color: '#8F9191' },
   nextMeta: { fontSize: '11px', color: '#8F9191', letterSpacing: '1px' },
   empty: { textAlign: 'center', color: '#8F9191', padding: '30px 0', fontSize: '13px' },
+  modalOverlay: {
+  position: 'fixed', inset: 0, zIndex: 100,
+  backgroundColor: 'rgba(0,0,0,0.7)',
+  backdropFilter: 'blur(4px)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  padding: '20px',
+},
+modal: {
+  backgroundColor: '#01183F',
+  border: '1px solid rgba(70,130,210,0.3)',
+  borderRadius: '16px',
+  width: '90%', maxWidth: '900px',
+  maxHeight: '85vh',
+  display: 'flex', flexDirection: 'column',
+  overflow: 'hidden',
+  boxShadow: '0 25px 80px rgba(0,0,0,0.6)',
+},
+modalHeader: {
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  padding: '24px 28px',
+  borderBottom: '1px solid rgba(70,130,210,0.2)',
+  backgroundColor: 'rgba(1,24,63,0.8)',
+  flexShrink: 0,
+  gap: '20px',
+},
+modalName: {
+  margin: 0, fontSize: '26px', fontWeight: 900, letterSpacing: '2px', color: '#fff',
+},
+modalSub: {
+  margin: '2px 0 0', fontSize: '11px', letterSpacing: '3px', color: '#8F9191',
+},
+modalStats: {
+  display: 'flex', gap: '24px', flex: 1, justifyContent: 'center',
+},
+modalStat: { textAlign: 'center' },
+modalStatNum: { fontSize: '28px', fontWeight: 900, color: '#fff', lineHeight: 1 },
+modalStatLabel: { fontSize: '10px', letterSpacing: '2px', color: '#8F9191', marginTop: '3px' },
+modalClose: {
+  background: 'none', border: '1px solid rgba(255,255,255,0.15)',
+  borderRadius: '6px', color: '#8F9191', fontSize: '16px',
+  padding: '6px 10px', cursor: 'pointer', flexShrink: 0,
+},
+modalBody: {
+  overflowY: 'auto', flex: 1, padding: '16px 28px',
+},
+modalLoading: {
+  textAlign: 'center', color: '#8F9191', padding: '40px', fontSize: '14px',
+},
+modalTable: { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
+modalTh: {
+  textAlign: 'left', padding: '8px 10px',
+  fontSize: '10px', letterSpacing: '2px', color: '#8F9191',
+  borderBottom: '2px solid rgba(70,130,210,0.2)',
+  position: 'sticky', top: 0, backgroundColor: '#01183F',
+},
+modalTd: { padding: '10px 10px', borderBottom: '1px solid rgba(255,255,255,0.04)', verticalAlign: 'middle' },
+wildcardTag: {
+  fontSize: '11px', color: '#AD0E28', fontWeight: 700,
+},
+goalieTag: {
+  marginLeft: '6px', fontSize: '10px', backgroundColor: 'rgba(70,130,210,0.3)',
+  color: '#7db8f7', padding: '1px 5px', borderRadius: '3px', fontWeight: 700,
+},
 }
