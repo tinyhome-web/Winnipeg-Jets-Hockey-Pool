@@ -59,8 +59,15 @@ export default function Admin() {
 
   const addUser = async () => {
     if (!newName || !newEmail) return setParticipantMsg('Please enter both name and email')
-    const { error } = await supabase.from('users').insert([{ name: newName, email: newEmail }])
+    const { data, error } = await supabase.from('users').insert([{ name: newName, email: newEmail }]).select()
     if (error) return setParticipantMsg('Error: ' + error.message)
+    
+    // Add to current active season
+    const { data: season } = await supabase.from('seasons').select('id').eq('is_active', true).single()
+    if (season && data?.[0]) {
+      await supabase.from('season_participants').insert([{ season_id: season.id, user_id: data[0].id, total_points: 0 }])
+    }
+    
     setParticipantMsg('Participant added!')
     setNewName('')
     setNewEmail('')
@@ -68,9 +75,13 @@ export default function Admin() {
   }
 
   const deleteUser = async (id) => {
-    await supabase.from('users').delete().eq('id', id)
-    fetchUsers()
-  }
+  // Delete related records first
+  await supabase.from('picks').delete().eq('user_id', id)
+  await supabase.from('picking_order').delete().eq('user_id', id)
+  await supabase.from('season_participants').delete().eq('user_id', id)
+  await supabase.from('users').delete().eq('id', id)
+  fetchUsers()
+}
 
   const importSchedule = async () => {
     setImporting(true)
