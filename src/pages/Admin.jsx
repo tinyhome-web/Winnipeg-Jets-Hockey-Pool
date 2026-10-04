@@ -3,6 +3,60 @@ import { supabase } from '../supabaseClient'
 
 const ADMIN_PASSWORD = '2026test99'
 
+function CustomSelect({ value, onChange, options, placeholder }) {
+  const [open, setOpen] = useState(false)
+  const selected = options.find(o => o.value === value)
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <div
+        onClick={() => setOpen(!open)}
+        style={{
+          padding: '4px 8px', backgroundColor: '#0a1f4e',
+          border: '1px solid rgba(255,255,255,0.15)', borderRadius: '4px',
+          color: value ? '#fff' : '#8F9191', fontSize: '12px',
+          cursor: 'pointer', display: 'flex', justifyContent: 'space-between',
+          alignItems: 'center', userSelect: 'none', minHeight: '28px',
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <span style={{ marginLeft: '4px', fontSize: '10px', flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000,
+          backgroundColor: '#0a1f4e', border: '1px solid rgba(255,255,255,0.2)',
+          borderRadius: '4px', maxHeight: '200px', overflowY: 'auto',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+        }}>
+          {options.map((opt, i) => (
+            opt.isGroup ? (
+              <div key={i} style={{
+                padding: '4px 8px', fontSize: '10px', letterSpacing: '1px',
+                color: '#8F9191', backgroundColor: '#01183F', fontWeight: 700,
+              }}>{opt.label}</div>
+            ) : (
+              <div key={i}
+                onClick={() => { onChange(opt.value); setOpen(false) }}
+                style={{
+                  padding: '6px 12px', fontSize: '12px', color: '#fff',
+                  cursor: 'pointer', backgroundColor: value === opt.value ? 'rgba(70,130,210,0.3)' : 'transparent',
+                }}
+                onMouseEnter={e => e.target.style.backgroundColor = 'rgba(70,130,210,0.2)'}
+                onMouseLeave={e => e.target.style.backgroundColor = value === opt.value ? 'rgba(70,130,210,0.3)' : 'transparent'}
+              >
+                {opt.label}
+              </div>
+            )
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Admin() {
   const [password, setPassword] = useState('')
   const [authenticated, setAuthenticated] = useState(false)
@@ -552,18 +606,20 @@ export default function Admin() {
                           {isWildcard ? (
                             <em style={{ color: '#545559', fontSize: '12px' }}>Auto — best unpicked Jets player</em>
                           ) : (
-                            <select value={picks[user.id] || ''} onChange={e => setPicks({ ...picks, [user.id]: e.target.value })} style={a.pickSelect}>
-                              <option value="">-- Select --</option>
-                              <optgroup label="Goalies">
-                                {players.filter(p => p.is_goalie).map(p => <option key={p.id} value={p.id}>{p.name} ({p.team})</option>)}
-                              </optgroup>
-                              <optgroup label="WPG Skaters">
-                                {players.filter(p => !p.is_goalie && p.team === 'WPG').map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                              </optgroup>
-                              <optgroup label={`${selectedGame.opponent} Skaters`}>
-                                {players.filter(p => !p.is_goalie && p.team === selectedGame.opponent).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                              </optgroup>
-                            </select>
+                            <CustomSelect
+                              value={picks[user.id] || ''}
+                              onChange={(val) => setPicks({ ...picks, [user.id]: val })}
+                              placeholder="-- Select --"
+                              options={[
+                                { value: '', label: '-- Select --' },
+                                { isGroup: true, label: 'GOALIES' },
+                                ...players.filter(p => p.is_goalie).map(p => ({ value: p.id, label: `${p.name} (${p.team})` })),
+                                { isGroup: true, label: 'WPG SKATERS' },
+                                ...players.filter(p => !p.is_goalie && p.team === 'WPG').map(p => ({ value: p.id, label: p.name })),
+                                { isGroup: true, label: `${selectedGame.opponent} SKATERS` },
+                                ...players.filter(p => !p.is_goalie && p.team === selectedGame.opponent).map(p => ({ value: p.id, label: p.name })),
+                              ]}
+                            />
                           )}
                         </span>
                         <span style={{ flex: 1 }}>
