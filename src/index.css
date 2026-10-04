@@ -25,3 +25,12 @@ a {
 button {
   cursor: pointer;
 }
+select option {
+  background-color: #0a1f4e;
+  color: #fff;
+}
+
+select {
+  background-color: #0a1f4e;
+  color: #fff;
+}
