@@ -475,9 +475,13 @@ export default function Admin() {
           breakdown: breakdown.join(', ') || 'No points'
         }).eq('id', pick.id)
 
+        // Get previous points for this pick before updating
+        const { data: oldPick } = await supabase.from('picks').select('points_earned').eq('id', pick.id).single()
+        const oldPoints = oldPick?.points_earned || 0
+
         const { data: currentStanding } = await supabase.from('season_participants').select('total_points').eq('user_id', pick.user_id).single()
         const currentPoints = currentStanding?.total_points || 0
-        await supabase.from('season_participants').update({ total_points: currentPoints + points }).eq('user_id', pick.user_id)
+        await supabase.from('season_participants').update({ total_points: currentPoints - oldPoints + points }).eq('user_id', pick.user_id)
 
         results.push({
           name: pick.users?.name,
