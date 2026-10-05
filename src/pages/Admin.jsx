@@ -470,7 +470,10 @@ export default function Admin() {
           }
         }
 
-        await supabase.from('picks').update({ points_earned: points }).eq('id', pick.id)
+        await supabase.from('picks').update({ 
+          points_earned: points,
+          breakdown: breakdown.join(', ') || 'No points'
+        }).eq('id', pick.id)
 
         const { data: currentStanding } = await supabase.from('season_participants').select('total_points').eq('user_id', pick.user_id).single()
         const currentPoints = currentStanding?.total_points || 0
@@ -491,8 +494,9 @@ export default function Admin() {
       setCalcMessage('Points calculated!')
       fetchGames()
     } catch (err) {
-      setCalcMessage('Error: ' + err.message)
-    }
+    console.error('Full error:', err)
+    setCalcMessage('Error: ' + err.message)
+  }
     setCalculating(false)
   }
 

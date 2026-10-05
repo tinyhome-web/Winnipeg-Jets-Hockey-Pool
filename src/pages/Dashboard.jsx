@@ -50,19 +50,22 @@ export default function Dashboard() {
   }
 
   const fetchPlayerHistory = async (user) => {
-    setSelectedPlayer(user)
-    setLoadingHistory(true)
-    setPlayerHistory([])
+  setSelectedPlayer(user)
+  setLoadingHistory(true)
+  setPlayerHistory([])
+  
 
-      const { data: picks } = await supabase
-      .from('picks')
-      .select('*, games(game_date, opponent, is_home, jets_score, opponent_score, winning_team, status), players(name, team, is_goalie)')
-      .eq('user_id', user.users.id)
-      .order('created_at', { ascending: false })
+  const { data: picks, error } = await supabase
+    .from('picks')
+    .select('*, games(game_date, opponent, is_home, jets_score, opponent_score, winning_team, status), players(name, team, is_goalie), breakdown')
+    .eq('user_id', user.user_id)
+    .eq('games.status', 'final')
+    .order('created_at', { ascending: false })
 
-      if (picks) setPlayerHistory(picks)
-      setLoadingHistory(false)
-    }
+  console.log('picks:', picks, 'error:', error)
+  if (picks) setPlayerHistory(picks.filter(p => p.games !== null))
+  setLoadingHistory(false)
+}
 
   if (loading) return (
     <div style={s.loadingScreen}>
@@ -235,14 +238,14 @@ export default function Dashboard() {
           </div>
           <div style={s.modalStat}>
             <div style={s.modalStatNum}>
-              {playerHistory.filter(p => p.games?.status === 'final').length}
+              {playerHistory.length}
             </div>
             <div style={s.modalStatLabel}>GAMES</div>
           </div>
           <div style={s.modalStat}>
             <div style={s.modalStatNum}>
-              {playerHistory.filter(p => p.games?.status === 'final').length > 0
-                ? (selectedPlayer.total_points / playerHistory.filter(p => p.games?.status === 'final').length).toFixed(1)
+              {playerHistory.length > 0
+                ? (selectedPlayer.total_points / playerHistory.length).toFixed(1)
                 : '0.0'}
             </div>
             <div style={s.modalStatLabel}>AVG/GAME</div>
@@ -328,7 +331,7 @@ export default function Dashboard() {
                       )}
                     </td>
                     <td style={{ ...s.modalTd, fontSize: '11px', color: '#8F9191', maxWidth: '180px' }}>
-                      {isFinal ? (pick.points_earned > 0 ? '✓ ' : '') : '—'}
+                      {isFinal ? (pick.breakdown || '—') : '—'}
                     </td>
                     <td style={{ ...s.modalTd, textAlign: 'right' }}>
                       {isFinal ? (
