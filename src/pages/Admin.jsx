@@ -505,6 +505,14 @@ export default function Admin() {
         })
       }
 
+      // Safety net: recalculate all standings from scratch
+      const { data: allParticipants } = await supabase.from('season_participants').select('user_id')
+      for (const participant of (allParticipants || [])) {
+      const { data: allPicks } = await supabase.from('picks').select('points_earned').eq('user_id', participant.user_id)
+      const totalPoints = (allPicks || []).reduce((sum, p) => sum + (p.points_earned || 0), 0)
+      await supabase.from('season_participants').update({ total_points: totalPoints }).eq('user_id', participant.user_id)
+      }
+      
       results.sort((a, b) => b.points - a.points)
       setCalcResults(results)
       setCalcMessage('Points calculated!')
