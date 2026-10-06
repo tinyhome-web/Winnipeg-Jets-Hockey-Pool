@@ -479,9 +479,21 @@ export default function Admin() {
         const { data: oldPick } = await supabase.from('picks').select('points_earned').eq('id', pick.id).single()
         const oldPoints = oldPick?.points_earned || 0
 
-        const { data: currentStanding } = await supabase.from('season_participants').select('total_points').eq('user_id', pick.user_id).single()
+        const { data: currentStanding, error: standingError } = await supabase
+          .from('season_participants')
+          .select('total_points')
+          .eq('user_id', pick.user_id)
+          .single()
+
+        if (standingError) console.error('Standing fetch error:', standingError)
+
         const currentPoints = currentStanding?.total_points || 0
-        await supabase.from('season_participants').update({ total_points: currentPoints - oldPoints + points }).eq('user_id', pick.user_id)
+        const { error: updateError } = await supabase
+          .from('season_participants')
+          .update({ total_points: currentPoints - oldPoints + points })
+          .eq('user_id', pick.user_id)
+
+        if (updateError) console.error('Standing update error:', updateError)
 
         results.push({
           name: pick.users?.name,
